@@ -1,6 +1,7 @@
 import { CurrencyPreference } from "@prisma/client";
 import { SlashCommandBuilder } from "discord.js";
-import { poolEmbed, poolPositionsEmbed, topLpersEmbed } from "../interactions/embeds.js";
+import { poolEmbed, poolPositionsEmbed } from "../interactions/embeds.js";
+import { createTopLpersView } from "../interactions/topLpersPagination.js";
 import { getPoolInfo, getPoolPositions, getTopLpers } from "../services/lpagent/pools.js";
 import { getWallet } from "../services/walletService.js";
 import type { Command } from "../types/discord.js";
@@ -132,8 +133,17 @@ export const poolCommand: Command = {
       limit: interaction.options.getInteger("limit") ?? 5,
     });
 
+    const rendered = createTopLpersView({
+      userId: interaction.user.id,
+      poolId,
+      currency,
+      lpers: topLpers.lpers,
+      pagination: topLpers.pagination,
+    });
+
     await interaction.editReply({
-      embeds: [topLpersEmbed(poolId, topLpers.lpers, topLpers.pagination, currency)],
+      embeds: rendered.embeds,
+      components: rendered.components,
     });
   },
 };

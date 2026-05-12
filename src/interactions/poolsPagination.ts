@@ -5,9 +5,11 @@ import {
   type APIEmbed,
   type ButtonInteraction,
   type MessageActionRowComponentBuilder,
+  MessageFlags,
 } from "discord.js";
 import { discoverPools, type DiscoverPoolsInput } from "../services/lpagent/pools.js";
 import type { PoolDiscoveryItem } from "../types/lpagent.js";
+import { formatUsd } from "../utils/formatter.js";
 import { poolsEmbed } from "./embeds.js";
 
 const SESSION_TTL_MS = 15 * 60 * 1000;
@@ -20,6 +22,8 @@ interface PoolsSession {
   sortBy: DiscoverPoolsInput["sortBy"];
   pageSize: number;
   currentPage: number;
+  /** Cached pools from the last render so the share button can reference them */
+  lastPools: PoolDiscoveryItem[];
   expiresAt: number;
 }
 
@@ -43,6 +47,7 @@ export async function createPoolsSession(input: {
     sortBy: input.sortBy,
     pageSize: input.pageSize,
     currentPage: 1,
+    lastPools: [],
     expiresAt: Date.now() + SESSION_TTL_MS,
   };
   sessions.set(session.id, session);
@@ -74,6 +79,11 @@ export async function handlePoolsPaginationButton(
     return true;
   }
 
+  if (parsed.action === "share") {
+    await handlePoolShare(interaction, session, parsed.index);
+    return true;
+  }
+
   await interaction.deferUpdate();
 
   session.currentPage = Math.max(1, session.currentPage + (parsed.action === "next" ? 1 : -1));
@@ -97,9 +107,15 @@ async function renderSession(session: PoolsSession): Promise<PoolsRender> {
     session.currentPage = totalPages;
   }
 
+  // Cache pools for share button
+  session.lastPools = result.pools;
+
   const components: ActionRowBuilder<MessageActionRowComponentBuilder>[] = [];
-  const zapRow = zapInRow(result.pools);
+  const zapRow = zapInRow(session.id, result.pools);
   if (zapRow) components.push(zapRow);
+
+  const shareRow = shareButtonRow(session.id, result.pools);
+  if (shareRow) components.push(shareRow);
 
   const navRow = navigationRow(session.id, session.currentPage, totalPages);
   if (navRow) components.push(navRow);
@@ -111,6 +127,7 @@ async function renderSession(session: PoolsSession): Promise<PoolsRender> {
 }
 
 function zapInRow(
+  sessionId: string,
   pools: PoolDiscoveryItem[],
 ): ActionRowBuilder<MessageActionRowComponentBuilder> | null {
   if (pools.length === 0) return null;
@@ -121,6 +138,68 @@ function zapInRow(
       .setStyle(ButtonStyle.Primary),
   );
   return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...buttons);
+}
+
+function shareButtonRow(
+  sessionId: string,
+  pools: PoolDiscoveryItem[],
+): ActionRowBuilder<MessageActionRowComponentBuilder> | null {
+  if (pools.length === 0) return null;
+  const buttons = pools.slice(0, 5).map((pool, index) =>
+    new ButtonBuilder()
+      .setCustomId(`pools:${sessionId}:share:${index}`)
+      .setLabel(`📢 #${index + 1}`)
+      .setStyle(ButtonStyle.Secondary),
+  );
+  return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...buttons);
+}
+
+async function handlePoolShare(
+  interaction: ButtonInteraction,
+  session: PoolsSession,
+  index: number | null,
+): Promise<void> {
+  if (index === null || index < 0 || index >= session.lastPools.length) {
+    await interaction.reply({
+      content: "That pool is no longer available in this page.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const pool = session.lastPools[index]!;
+  const pair = `${pool.token0_symbol ?? "?"}/${pool.token1_symbol ?? "?"}`;
+
+  const shareMessage = [
+    `📢 **${pair}** — shared by <@${interaction.user.id}>`,
+    "",
+    `Pool: \`${pool.pool}\``,
+    `TVL: ${formatUsd(pool.tvl)} — 24h Vol: ${formatUsd(pool.vol_24h)}`,
+    "",
+    "Click **Zap In** below to open a position in this pool.",
+  ].join("\n");
+
+  const zapInButton = new ButtonBuilder()
+    .setCustomId(`zap-in:${pool.pool}`)
+    .setLabel("Zap In")
+    .setStyle(ButtonStyle.Primary);
+
+  const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(zapInButton);
+
+  const channel = interaction.channel;
+  if (!channel || !("send" in channel)) {
+    await interaction.editReply({ content: "Cannot share in this channel type." });
+    return;
+  }
+
+  await channel.send({
+    content: shareMessage,
+    components: [row],
+  });
+
+  await interaction.editReply({ content: "Pool shared to the channel! 📢" });
 }
 
 function navigationRow(
@@ -145,13 +224,22 @@ function navigationRow(
 
 function parsePoolsButtonId(customId: string): {
   sessionId: string;
-  action: "prev" | "next";
+  action: "prev" | "next" | "share";
+  index: number | null;
 } | null {
-  const [scope, sessionId, action] = customId.split(":");
-  if (scope !== "pools" || !sessionId || (action !== "prev" && action !== "next")) {
+  const [scope, sessionId, action, index] = customId.split(":");
+  if (
+    scope !== "pools" ||
+    !sessionId ||
+    (action !== "prev" && action !== "next" && action !== "share")
+  ) {
     return null;
   }
-  return { sessionId, action };
+  return {
+    sessionId,
+    action,
+    index: action === "share" && Number.isInteger(Number(index)) ? Number(index) : null,
+  };
 }
 
 function cleanupExpired(): void {

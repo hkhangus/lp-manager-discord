@@ -13,7 +13,7 @@ import { buildPositionZapInPreset } from "../services/positionCopyService.js";
 import { requireWallet } from "../services/walletService.js";
 import { createZapInSession } from "../signer/store.js";
 import type { LpPosition } from "../types/lpagent.js";
-import { formatNative, formatPercent, shortPositionId } from "../utils/formatter.js";
+import { formatNative, formatPercent, formatUsd, shortPositionId, truncateAddress } from "../utils/formatter.js";
 import { positionsEmbed } from "./embeds.js";
 
 const POSITIONS_PAGE_SIZE = 4;
@@ -89,6 +89,11 @@ export async function handlePositionsPaginationButton(
 
   if (parsed.action === "zap-in") {
     await handlePositionZapIn(interaction, session, parsed.index);
+    return true;
+  }
+
+  if (parsed.action === "share") {
+    await handlePositionShare(interaction, session, parsed.index);
     return true;
   }
 
@@ -201,6 +206,66 @@ async function handlePositionZapIn(
   });
 }
 
+async function handlePositionShare(
+  interaction: ButtonInteraction,
+  session: PositionPaginationSession,
+  index: number | null,
+): Promise<void> {
+  if (index === null || index < 0 || index >= session.positions.length) {
+    await interaction.reply({
+      content: "That position is no longer available in this page session.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const position = session.positions[index]!;
+  const poolAddress = position.pool;
+  if (!poolAddress) {
+    await interaction.editReply({ content: "This position does not include a pool address to share." });
+    return;
+  }
+
+  const pair = position.pairName ?? `${position.tokenName0 ?? "?"}/${position.tokenName1 ?? "?"}`;
+  const pnlValue = position.pnl
+    ? formatUsd(typeof position.pnl === "object" ? position.pnl.value : position.pnl)
+    : "n/a";
+  const range = position.inRange === false ? "⚠️ Out of range" : "✅ In range";
+
+  const shareMessage = [
+    `📢 **${pair}** — shared by <@${interaction.user.id}>`,
+    "",
+    `Pool: \`${poolAddress}\``,
+    `Position: \`${shortPositionId(position.position ?? position.id)}\``,
+    `Owner: \`${truncateAddress(session.walletAddress, 6, 6)}\``,
+    `PnL: ${pnlValue} — ${range}`,
+    "",
+    "Click **Zap In** below to open your own position in this pool.",
+  ].join("\n");
+
+  const zapInButton = new ButtonBuilder()
+    .setCustomId(`zap-in:${poolAddress}`)
+    .setLabel("Zap In")
+    .setStyle(ButtonStyle.Primary);
+
+  const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(zapInButton);
+
+  const channel = interaction.channel;
+  if (!channel || !("send" in channel)) {
+    await interaction.editReply({ content: "Cannot share in this channel type." });
+    return;
+  }
+
+  await channel.send({
+    content: shareMessage,
+    components: [row],
+  });
+
+  await interaction.editReply({ content: "Position shared to the channel! 📢" });
+}
+
 function positionActionRows(
   sessionId: string,
   walletAddress: string,
@@ -223,6 +288,10 @@ function positionActionRows(
           .setCustomId(`positions:${sessionId}:zap-in:${globalIndex}`)
           .setLabel("Zap In")
           .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`positions:${sessionId}:share:${globalIndex}`)
+          .setLabel("📢 Share")
+          .setStyle(ButtonStyle.Secondary),
       ];
 
       if (isOwnWallet && position.position) {
@@ -260,7 +329,7 @@ function positionsPaginationRow(
 
 function parsePositionsButtonId(customId: string): {
   sessionId: string;
-  action: "prev" | "next" | "zap-in";
+  action: "prev" | "next" | "zap-in" | "share";
   index: number | null;
 } | null {
   const [scope, sessionId, action, index] = customId.split(":");
@@ -268,7 +337,7 @@ function parsePositionsButtonId(customId: string): {
   if (
     scope !== "positions" ||
     !sessionId ||
-    (action !== "prev" && action !== "next" && action !== "zap-in")
+    (action !== "prev" && action !== "next" && action !== "zap-in" && action !== "share")
   ) {
     return null;
   }
@@ -276,7 +345,7 @@ function parsePositionsButtonId(customId: string): {
   return {
     sessionId,
     action,
-    index: action === "zap-in" && Number.isInteger(Number(index)) ? Number(index) : null,
+    index: (action === "zap-in" || action === "share") && Number.isInteger(Number(index)) ? Number(index) : null,
   };
 }
 

@@ -61,6 +61,10 @@ export async function requireWalletConfig(discordUserId: string): Promise<{
   };
 }
 
+export async function getAllWalletUsers() {
+  return prisma.discordUser.findMany();
+}
+
 export async function unlinkWallet(discordUserId: string): Promise<boolean> {
   const user = await getWallet(discordUserId);
 

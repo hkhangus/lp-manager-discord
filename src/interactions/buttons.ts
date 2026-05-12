@@ -2,6 +2,7 @@ import type { ButtonInteraction } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { handlePositionsPaginationButton } from "./pagination.js";
 import { handlePoolsPaginationButton } from "./poolsPagination.js";
+import { handleTopLpersButton } from "./topLpersPagination.js";
 import { handleZapInButton, isZapInButton } from "./zapIn.js";
 import { handleZapOutButton, isZapOutButton } from "./zapOut.js";
 
@@ -11,6 +12,10 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
   }
 
   if (await handlePoolsPaginationButton(interaction)) {
+    return;
+  }
+
+  if (await handleTopLpersButton(interaction)) {
     return;
   }
 

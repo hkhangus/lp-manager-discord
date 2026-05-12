@@ -330,6 +330,33 @@ export function alertsEmbed(alerts: Alert[]): EmbedBuilder {
   });
 }
 
+export function rankingEmbed(
+  rankings: Array<{
+    discordUserId: string;
+    walletAddress: string;
+    totalPnl: number;
+    totalFee: number;
+    roi: number | undefined;
+    openingLp: number;
+  }>,
+): EmbedBuilder {
+  const medals = ["🥇", "🥈", "🥉"];
+
+  const leaderboard = rankings
+    .map((entry, index) => {
+      const rank = medals[index] ?? `**#${index + 1}**`;
+      const pnl = formatUsd(entry.totalPnl);
+      const fee = formatUsd(entry.totalFee);
+      const roi = formatPercent(entry.roi);
+      return `${rank} <@${entry.discordUserId}> — PnL ${pnl} — Fees ${fee} — ROI ${roi}\n\`${truncateAddress(entry.walletAddress, 6, 6)}\``;
+    })
+    .join("\n\n");
+
+  return baseEmbed("🏆 Channel PnL Ranking")
+    .setDescription(leaderboard)
+    .setFooter({ text: `${rankings.length} member${rankings.length === 1 ? "" : "s"} ranked` });
+}
+
 export function warningEmbed(title: string, description: string): EmbedBuilder {
   return new EmbedBuilder().setColor(WARNING_COLOR).setTitle(title).setDescription(description);
 }
