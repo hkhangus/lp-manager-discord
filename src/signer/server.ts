@@ -1,13 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import {
-  generateZapOutTx,
-  submitZapOutLanding,
-} from "../services/lpagent/positions.js";
-import {
-  generateZapInTx,
-  getPoolInfo,
-  submitZapInLanding,
-} from "../services/lpagent/pools.js";
+import { generateZapOutTx, submitZapOutLanding } from "../services/lpagent/positions.js";
+import { generateZapInTx, getPoolInfo, submitZapInLanding } from "../services/lpagent/pools.js";
 import type { PoolInfo, ZapInStrategy } from "../types/lpagent.js";
 import { LpAgentError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
@@ -151,11 +144,13 @@ async function generateZapIn(
   let inputSOL: number;
   let stratergy: ZapInStrategy;
   let slippage_bps: number;
+  let percentX: number;
   try {
     const obj = (body ?? {}) as Record<string, unknown>;
-    inputSOL = parseAmount(obj.inputSOL, "Input SOL");
-    stratergy = parseStrategy(obj.stratergy);
-    slippage_bps = parseSlippage(obj.slippage_bps);
+    inputSOL = parseAmount(obj.inputSOL ?? session.inputSOL, "Input SOL");
+    stratergy = parseStrategy(obj.stratergy ?? session.stratergy);
+    slippage_bps = parseSlippage(obj.slippage_bps ?? session.slippage_bps ?? 500);
+    percentX = parsePercentX(obj.percentX ?? session.percentX ?? 0.5);
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : "Invalid params" });
     return;
@@ -169,8 +164,9 @@ async function generateZapIn(
     return;
   }
 
-  const activeBinId = extractActiveBinId(poolInfo);
-  if (activeBinId === null) {
+  const extractedActiveBinId = session.activeBinId ?? extractActiveBinId(poolInfo);
+  const hasPresetRange = session.fromBinId !== null && session.toBinId !== null;
+  if (extractedActiveBinId === null && !hasPresetRange) {
     logger.warn(
       {
         sessionId: session.id,
@@ -185,14 +181,16 @@ async function generateZapIn(
     return;
   }
 
-  const fromBinId = activeBinId - RANGE_BINS;
-  const toBinId = activeBinId + RANGE_BINS;
+  const activeBinId =
+    extractedActiveBinId ?? Math.floor(((session.fromBinId ?? 0) + (session.toBinId ?? 0)) / 2);
+  const fromBinId = session.fromBinId ?? activeBinId - RANGE_BINS;
+  const toBinId = session.toBinId ?? activeBinId + RANGE_BINS;
 
   const tx = await generateZapInTx(session.poolAddress, {
     stratergy,
     owner: session.owner,
     inputSOL,
-    percentX: 0.5,
+    percentX,
     fromBinId,
     toBinId,
     slippage_bps,
@@ -211,11 +209,12 @@ async function generateZapIn(
   const updated = applyZapInGenerated(session.id, {
     stratergy,
     inputSOL,
+    percentX,
     slippage_bps,
     activeBinId,
     fromBinId,
     toBinId,
-    pairLabel: extractPairLabel(poolInfo),
+    pairLabel: session.pairLabel ?? extractPairLabel(poolInfo),
     swapTxsWithJito: swapTxs,
     addLiquidityTxsWithJito: addTxs,
     lastValidBlockHeight: tx.lastValidBlockHeight ?? null,
@@ -412,7 +411,8 @@ async function submitZapOut(
     {
       sessionId: session.id,
       kind: "zap-out",
-      bodyKeys: body && typeof body === "object" ? Object.keys(body as Record<string, unknown>) : null,
+      bodyKeys:
+        body && typeof body === "object" ? Object.keys(body as Record<string, unknown>) : null,
       sessionCloseLen: session.closeTxsWithJito.length,
       sessionSwapLen: session.swapTxsWithJito.length,
     },
@@ -465,6 +465,7 @@ function publicSession(session: ZapSession) {
       pairLabel: session.pairLabel,
       stratergy: session.stratergy,
       inputSOL: session.inputSOL,
+      percentX: session.percentX,
       slippage_bps: session.slippage_bps,
       activeBinId: session.activeBinId,
       fromBinId: session.fromBinId,
@@ -521,6 +522,14 @@ function parseSlippage(raw: unknown): number {
   const value = typeof raw === "number" ? raw : Number(String(raw ?? "").trim());
   if (!Number.isInteger(value) || value < 0 || value > 10000) {
     throw new Error("Slippage must be an integer between 0 and 10000 basis points.");
+  }
+  return value;
+}
+
+function parsePercentX(raw: unknown): number {
+  const value = typeof raw === "number" ? raw : Number(String(raw ?? "").trim());
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error("Percent X must be a number between 0 and 1.");
   }
   return value;
 }

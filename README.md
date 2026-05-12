@@ -57,7 +57,7 @@ Discord bot MVP for LPAgent communities. Users configure a public wallet address
 - `/wallet unlink`
 - `/balance`
 - `/positions address:<optional>`
-- `/portfolio`
+- `/portfolio address:<optional>`
 - `/pools search:<token> sort:<optional, defaults to fee_tvl_ratio>`
 - `/pool info address:<poolAddress>`
 - `/pool positions address:<poolAddress> owner:<optional> status:<optional>`

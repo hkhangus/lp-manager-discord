@@ -34,12 +34,15 @@ export interface LpPosition {
   position?: string;
   status?: string;
   strategyType?: string;
+  tokenId?: string;
   pairName?: string;
   currentValue?: string | number;
   value?: string | number;
   valueNative?: string | number;
   inputValue?: string | number;
+  inputNative?: string | number;
   collectedFee?: string | number;
+  collectedFeeNative?: string | number;
   unCollectedFee?: string | number;
   uncollectedFee?: string | number;
   unCollectedFeeNative?: string | number;
@@ -51,8 +54,21 @@ export interface LpPosition {
   } | null;
   inRange?: boolean;
   pool?: string;
+  owner?: string;
+  tickLower?: number;
+  tickUpper?: number;
+  token0?: string;
+  token1?: string;
+  price0?: number;
+  price1?: number;
   tokenName0?: string;
   tokenName1?: string;
+  current?: {
+    amount0?: string | number;
+    amount1?: string | number;
+    amount0Adjusted?: string | number;
+    amount1Adjusted?: string | number;
+  };
   token0Info?: {
     token_symbol?: string;
     token_name?: string;
@@ -68,20 +84,33 @@ export interface LpPosition {
 
 export interface PortfolioOverview {
   owner: string;
+  chain?: string;
+  protocol?: string;
   total_inflow?: number;
+  avg_inflow?: Record<string, number | string> | number | string;
   total_outflow?: number;
-  total_fee?: Record<string, number | string>;
-  total_pnl?: Record<string, number | string>;
-  total_fee_native?: Record<string, number | string>;
-  total_pnl_native?: Record<string, number | string>;
+  total_fee?: Record<string, number | string> | number | string;
+  total_pnl?: Record<string, number | string> | number | string;
+  total_inflow_native?: number;
+  avg_inflow_native?: Record<string, number | string> | number | string;
+  total_outflow_native?: number;
+  total_fee_native?: Record<string, number | string> | number | string;
+  total_pnl_native?: Record<string, number | string> | number | string;
+  total_lp?: string | number;
+  win_lp?: string | number;
+  win_lp_native?: string | number;
   opening_lp?: string | number;
-  closed_lp?: Record<string, string | number>;
+  closed_lp?: Record<string, string | number> | string | number;
   total_pool?: string | number;
-  win_rate?: Record<string, number>;
+  win_rate?: Record<string, number | string> | number | string;
+  win_rate_native?: Record<string, number | string> | number | string;
   roi?: number;
+  roi_avg_inflow?: number;
+  roi_avg_inflow_native?: number;
   apr?: number;
   first_activity?: string;
   last_activity?: string;
+  updated_at?: string;
 }
 
 export interface PoolDiscoveryItem {

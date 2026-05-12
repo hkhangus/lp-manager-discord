@@ -6,11 +6,17 @@ import {
   type APIEmbed,
   type ButtonInteraction,
   type MessageActionRowComponentBuilder,
+  MessageFlags,
 } from "discord.js";
+import { env } from "../config/env.js";
+import { buildPositionZapInPreset } from "../services/positionCopyService.js";
+import { requireWallet } from "../services/walletService.js";
+import { createZapInSession } from "../signer/store.js";
 import type { LpPosition } from "../types/lpagent.js";
+import { formatNative, formatPercent, shortPositionId } from "../utils/formatter.js";
 import { positionsEmbed } from "./embeds.js";
 
-const POSITIONS_PAGE_SIZE = 5;
+const POSITIONS_PAGE_SIZE = 4;
 const SESSION_TTL_MS = 15 * 60 * 1000;
 const sessions = new Map<string, PositionPaginationSession>();
 
@@ -81,6 +87,11 @@ export async function handlePositionsPaginationButton(
     return true;
   }
 
+  if (parsed.action === "zap-in") {
+    await handlePositionZapIn(interaction, session, parsed.index);
+    return true;
+  }
+
   const totalPages = getTotalPages(session.positions);
   session.page = Math.min(
     totalPages,
@@ -102,17 +113,15 @@ function renderPositionsSession(session: PositionPaginationSession): {
   const pagePositions = session.positions.slice(start, start + POSITIONS_PAGE_SIZE);
   const components: ActionRowBuilder<MessageActionRowComponentBuilder>[] = [];
 
-  const viewRow = positionsViewRow(session.walletAddress, pagePositions, start);
-  if (viewRow) {
-    components.push(viewRow);
-  }
-
-  if (session.isOwnWallet) {
-    const zapOutRow = positionsZapOutRow(pagePositions, start);
-    if (zapOutRow) {
-      components.push(zapOutRow);
-    }
-  }
+  components.push(
+    ...positionActionRows(
+      session.id,
+      session.walletAddress,
+      pagePositions,
+      start,
+      session.isOwnWallet,
+    ),
+  );
 
   if (totalPages > 1) {
     components.push(positionsPaginationRow(session.id, session.page, totalPages));
@@ -134,57 +143,100 @@ function renderPositionsSession(session: PositionPaginationSession): {
   };
 }
 
-function positionsZapOutRow(
-  positions: LpPosition[],
-  startIndex: number,
-): ActionRowBuilder<MessageActionRowComponentBuilder> | null {
-  const buttons = positions
-    .map((position, index) => {
-      const positionId = position.position ?? position.id;
-      if (!positionId) {
-        return null;
-      }
-      return new ButtonBuilder()
-        .setCustomId(`zap-out:${positionId}`)
-        .setLabel(`Zap-Out #${startIndex + index + 1}`)
-        .setStyle(ButtonStyle.Danger);
-    })
-    .filter((button): button is ButtonBuilder => button !== null)
-    .slice(0, 5);
-
-  if (buttons.length === 0) {
-    return null;
+async function handlePositionZapIn(
+  interaction: ButtonInteraction,
+  session: PositionPaginationSession,
+  index: number | null,
+): Promise<void> {
+  if (index === null || index < 0 || index >= session.positions.length) {
+    await interaction.reply({
+      content: "That position is no longer available in this page session.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
   }
 
-  return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...buttons);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const owner = await requireWallet(interaction.user.id);
+  const position = session.positions[index]!;
+  const preset = buildPositionZapInPreset(position);
+  const zapSession = createZapInSession({
+    discordUserId: interaction.user.id,
+    owner,
+    poolAddress: preset.poolAddress,
+    pairLabel: preset.pairLabel,
+    stratergy: preset.stratergy,
+    inputSOL: preset.inputSOL,
+    percentX: preset.percentX,
+    slippage_bps: preset.slippage_bps,
+    activeBinId: preset.activeBinId,
+    fromBinId: preset.fromBinId,
+    toBinId: preset.toBinId,
+  });
+
+  const signerUrl = `${env.SIGNER_BASE_URL.replace(/\/+$/, "")}/signer/${encodeURIComponent(zapSession.id)}`;
+  const summary = [
+    "**Zap-In copy session ready.**",
+    `Position: \`${shortPositionId(position.position ?? position.id)}\``,
+    `Pool: \`${preset.poolAddress}\``,
+    `Owner: \`${owner}\``,
+    `Strategy: \`${preset.stratergy}\``,
+    `Input: ${formatNative(preset.inputSOL)}`,
+    `Token X split: ${formatPercent(preset.percentX)}`,
+    `Range: \`${preset.fromBinId} -> ${preset.toBinId}\``,
+    "",
+    "Click **Open signer** to review, generate the LPAgent `/add-tx` transaction, and sign with Phantom or Solflare.",
+    "",
+    ":warning: No transaction has been signed or sent yet.",
+  ].join("\n");
+
+  const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+    new ButtonBuilder().setLabel("Open signer").setStyle(ButtonStyle.Link).setURL(signerUrl),
+  );
+
+  await interaction.editReply({
+    content: summary,
+    components: [row],
+  });
 }
 
-function positionsViewRow(
+function positionActionRows(
+  sessionId: string,
   walletAddress: string,
   positions: LpPosition[],
   startIndex: number,
-): ActionRowBuilder<MessageActionRowComponentBuilder> | null {
-  const buttons = positions
+  isOwnWallet: boolean,
+): ActionRowBuilder<MessageActionRowComponentBuilder>[] {
+  return positions
     .map((position, index) => {
+      const globalIndex = startIndex + index;
       const positionId = position.position ?? position.id;
       if (!positionId) {
         return null;
       }
 
       const url = `https://app.lpagent.io/portfolio?address=${encodeURIComponent(walletAddress)}&positionId=${encodeURIComponent(positionId)}`;
-      return new ButtonBuilder()
-        .setLabel(`View #${startIndex + index + 1}`)
-        .setStyle(ButtonStyle.Link)
-        .setURL(url);
+      const buttons: ButtonBuilder[] = [
+        new ButtonBuilder().setLabel("View").setStyle(ButtonStyle.Link).setURL(url),
+        new ButtonBuilder()
+          .setCustomId(`positions:${sessionId}:zap-in:${globalIndex}`)
+          .setLabel("Zap In")
+          .setStyle(ButtonStyle.Primary),
+      ];
+
+      if (isOwnWallet && position.position) {
+        buttons.push(
+          new ButtonBuilder()
+            .setCustomId(`zap-out:${position.position}`)
+            .setLabel("Zap Out")
+            .setStyle(ButtonStyle.Danger),
+        );
+      }
+
+      return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...buttons);
     })
-    .filter((button): button is ButtonBuilder => button !== null)
-    .slice(0, 5);
-
-  if (buttons.length === 0) {
-    return null;
-  }
-
-  return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...buttons);
+    .filter((row): row is ActionRowBuilder<MessageActionRowComponentBuilder> => row !== null);
 }
 
 function positionsPaginationRow(
@@ -208,17 +260,23 @@ function positionsPaginationRow(
 
 function parsePositionsButtonId(customId: string): {
   sessionId: string;
-  action: "prev" | "next";
+  action: "prev" | "next" | "zap-in";
+  index: number | null;
 } | null {
-  const [scope, sessionId, action] = customId.split(":");
+  const [scope, sessionId, action, index] = customId.split(":");
 
-  if (scope !== "positions" || !sessionId || (action !== "prev" && action !== "next")) {
+  if (
+    scope !== "positions" ||
+    !sessionId ||
+    (action !== "prev" && action !== "next" && action !== "zap-in")
+  ) {
     return null;
   }
 
   return {
     sessionId,
     action,
+    index: action === "zap-in" && Number.isInteger(Number(index)) ? Number(index) : null,
   };
 }
 

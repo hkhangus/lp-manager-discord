@@ -21,6 +21,7 @@ export interface ZapInSession extends BaseSession {
   pairLabel: string | null;
   stratergy: ZapInStrategy | null;
   inputSOL: number | null;
+  percentX: number | null;
   slippage_bps: number | null;
   activeBinId: number | null;
   fromBinId: number | null;
@@ -45,6 +46,7 @@ export type ZapSession = ZapInSession | ZapOutSession;
 export interface ZapInGeneratedFields {
   stratergy: ZapInStrategy;
   inputSOL: number;
+  percentX: number;
   slippage_bps: number;
   activeBinId: number;
   fromBinId: number;
@@ -73,6 +75,14 @@ export function createZapInSession(input: {
   discordUserId: string;
   owner: string;
   poolAddress: string;
+  pairLabel?: string | null;
+  stratergy?: ZapInStrategy | null;
+  inputSOL?: number | null;
+  percentX?: number | null;
+  slippage_bps?: number | null;
+  activeBinId?: number | null;
+  fromBinId?: number | null;
+  toBinId?: number | null;
 }): ZapInSession {
   cleanupExpired();
   const id = crypto.randomUUID();
@@ -82,13 +92,14 @@ export function createZapInSession(input: {
     discordUserId: input.discordUserId,
     owner: input.owner,
     poolAddress: input.poolAddress,
-    pairLabel: null,
-    stratergy: null,
-    inputSOL: null,
-    slippage_bps: null,
-    activeBinId: null,
-    fromBinId: null,
-    toBinId: null,
+    pairLabel: input.pairLabel ?? null,
+    stratergy: input.stratergy ?? null,
+    inputSOL: input.inputSOL ?? null,
+    percentX: input.percentX ?? null,
+    slippage_bps: input.slippage_bps ?? null,
+    activeBinId: input.activeBinId ?? null,
+    fromBinId: input.fromBinId ?? null,
+    toBinId: input.toBinId ?? null,
     swapTxsWithJito: [],
     addLiquidityTxsWithJito: [],
     lastValidBlockHeight: null,
@@ -141,14 +152,12 @@ export function getSession(id: string): ZapSession | null {
   return sessions.get(id) ?? null;
 }
 
-export function applyZapInGenerated(
-  id: string,
-  fields: ZapInGeneratedFields,
-): ZapInSession | null {
+export function applyZapInGenerated(id: string, fields: ZapInGeneratedFields): ZapInSession | null {
   const session = sessions.get(id);
   if (!session || session.kind !== "zap-in") return null;
   session.stratergy = fields.stratergy;
   session.inputSOL = fields.inputSOL;
+  session.percentX = fields.percentX;
   session.slippage_bps = fields.slippage_bps;
   session.activeBinId = fields.activeBinId;
   session.fromBinId = fields.fromBinId;

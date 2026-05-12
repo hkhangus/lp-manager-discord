@@ -189,6 +189,11 @@ export const SIGNER_PAGE_HTML = String.raw`<!doctype html>
         ];
         if (session.kind === "zap-in") {
           rows.unshift(row("Pool", session.poolAddress));
+          if (session.stratergy) rows.push(row("Strategy", session.stratergy));
+          if (session.inputSOL) rows.push(row("Input SOL", session.inputSOL));
+          if (session.fromBinId !== null && session.toBinId !== null) {
+            rows.push(row("Range", session.fromBinId + " -> " + session.toBinId));
+          }
         } else {
           rows.unshift(row("Position", session.positionId));
         }
@@ -197,11 +202,14 @@ export const SIGNER_PAGE_HTML = String.raw`<!doctype html>
 
       function renderFormFields() {
         if (session.kind === "zap-in") {
+          const inputSOL = session.inputSOL ?? 0.1;
+          const stratergy = session.stratergy ?? "Spot";
+          const slippage = session.slippage_bps ?? 500;
           $("form-fields").innerHTML = [
             '<div class="grid">',
-            '<div><label for="inputSOL">Input (SOL)</label><input id="inputSOL" type="number" min="0" step="0.001" value="0.1" /></div>',
-            '<div><label for="stratergy">Strategy</label><select id="stratergy"><option value="Spot" selected>Spot</option><option value="Curve">Curve</option><option value="BidAsk">BidAsk</option></select></div>',
-            '<div><label for="slippage_bps">Slippage (bps)</label><input id="slippage_bps" type="number" min="0" max="10000" step="1" value="500" /></div>',
+            '<div><label for="inputSOL">Input (SOL)</label><input id="inputSOL" type="number" min="0" step="0.001" value="' + escapeHtml(String(inputSOL)) + '" /></div>',
+            '<div><label for="stratergy">Strategy</label><select id="stratergy"><option value="Spot"' + selected(stratergy, "Spot") + '>Spot</option><option value="Curve"' + selected(stratergy, "Curve") + '>Curve</option><option value="BidAsk"' + selected(stratergy, "BidAsk") + '>BidAsk</option></select></div>',
+            '<div><label for="slippage_bps">Slippage (bps)</label><input id="slippage_bps" type="number" min="0" max="10000" step="1" value="' + escapeHtml(String(slippage)) + '" /></div>',
             "</div>",
           ].join("");
         } else {
@@ -224,6 +232,10 @@ export const SIGNER_PAGE_HTML = String.raw`<!doctype html>
 
       function row(k, v) {
         return '<div class="row"><span class="k">' + escapeHtml(k) + '</span><span class="v">' + escapeHtml(String(v)) + "</span></div>";
+      }
+
+      function selected(current, value) {
+        return current === value ? " selected" : "";
       }
 
       function escapeHtml(s) {
@@ -281,6 +293,7 @@ export const SIGNER_PAGE_HTML = String.raw`<!doctype html>
             inputSOL: Number($("inputSOL").value),
             stratergy: $("stratergy").value,
             slippage_bps: Number($("slippage_bps").value),
+            percentX: session.percentX ?? 0.5,
           };
         }
         return {

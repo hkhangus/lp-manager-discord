@@ -5,6 +5,7 @@ import type {
   ZapOutTxData,
   ZapOutTxInput,
 } from "../../types/lpagent.js";
+import { BotError } from "../../utils/errors.js";
 import { lpAgentClient } from "./client.js";
 
 export async function getOpeningPositions(owner: string): Promise<LpPosition[]> {
@@ -16,14 +17,20 @@ export async function getOpeningPositions(owner: string): Promise<LpPosition[]> 
 }
 
 export async function getPortfolioOverview(owner: string): Promise<PortfolioOverview> {
-  const response = await lpAgentClient.get<LpAgentResponse<PortfolioOverview>>(
-    "/lp-positions/overview",
-    {
-      owner,
-    },
-  );
+  const response = await lpAgentClient.get<
+    LpAgentResponse<PortfolioOverview | PortfolioOverview[]>
+  >("/lp-positions/overview", {
+    owner,
+    protocol: "meteora",
+  });
 
-  return response.data;
+  const overview = Array.isArray(response.data) ? response.data[0] : response.data;
+
+  if (!overview) {
+    throw new BotError("No portfolio overview data returned for this wallet.");
+  }
+
+  return overview;
 }
 
 export async function generateZapOutTx(input: ZapOutTxInput): Promise<ZapOutTxData> {

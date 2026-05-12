@@ -124,15 +124,15 @@ export function portfolioEmbed(
     .setDescription(`Wallet: \`${truncateAddress(walletAddress, 6, 6)}\``)
     .addFields(
       { name: "Opening LPs", value: formatNumber(overview.opening_lp), inline: true },
-      { name: "Closed LPs", value: formatNumber(overview.closed_lp?.ALL), inline: true },
+      { name: "Closed LPs", value: formatNumber(periodValue(overview.closed_lp)), inline: true },
       { name: "Pools", value: formatNumber(overview.total_pool), inline: true },
       { name: "Currency", value: currencyLabel(currency), inline: true },
       {
         name: "Total PnL",
         value: formatCurrencyValue(
           currency,
-          overview.total_pnl?.ALL,
-          overview.total_pnl_native?.ALL,
+          periodValue(overview.total_pnl),
+          periodValue(overview.total_pnl_native),
         ),
         inline: true,
       },
@@ -140,13 +140,21 @@ export function portfolioEmbed(
         name: "Total Fees",
         value: formatCurrencyValue(
           currency,
-          overview.total_fee?.ALL,
-          overview.total_fee_native?.ALL,
+          periodValue(overview.total_fee),
+          periodValue(overview.total_fee_native),
         ),
         inline: true,
       },
       { name: "ROI", value: formatPercent(overview.roi), inline: true },
-      { name: "Win Rate", value: formatPercent(overview.win_rate?.ALL), inline: true },
+      {
+        name: "Win Rate",
+        value: formatPercent(
+          currency === CurrencyPreference.NATIVE
+            ? (periodValue(overview.win_rate_native) ?? periodValue(overview.win_rate))
+            : periodValue(overview.win_rate),
+        ),
+        inline: true,
+      },
       { name: "APR", value: formatPercent(overview.apr), inline: true },
     );
 }
@@ -376,6 +384,15 @@ function paginationFooter(pagination: Pagination, label: string): string {
   const total = pagination.totalCount ?? pagination.total ?? 0;
 
   return `Page ${page}/${totalPages} - ${total} ${label}`;
+}
+
+function periodValue(value: unknown, period = "ALL"): unknown {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  return record[period] ?? record[period.toLowerCase()] ?? record.total ?? record.value;
 }
 
 function poolPositionId(position: PoolPosition): string | null {

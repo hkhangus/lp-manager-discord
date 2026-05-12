@@ -76,10 +76,7 @@ export async function handlePoolsPaginationButton(
 
   await interaction.deferUpdate();
 
-  session.currentPage = Math.max(
-    1,
-    session.currentPage + (parsed.action === "next" ? 1 : -1),
-  );
+  session.currentPage = Math.max(1, session.currentPage + (parsed.action === "next" ? 1 : -1));
   session.expiresAt = Date.now() + SESSION_TTL_MS;
 
   const rendered = await renderSession(session);
@@ -117,14 +114,12 @@ function zapInRow(
   pools: PoolDiscoveryItem[],
 ): ActionRowBuilder<MessageActionRowComponentBuilder> | null {
   if (pools.length === 0) return null;
-  const buttons = pools
-    .slice(0, 5)
-    .map((pool, index) =>
-      new ButtonBuilder()
-        .setCustomId(`zap-in:${pool.pool}`)
-        .setLabel(`Zap-In #${index + 1}`)
-        .setStyle(ButtonStyle.Primary),
-    );
+  const buttons = pools.slice(0, 5).map((pool, index) =>
+    new ButtonBuilder()
+      .setCustomId(`zap-in:${pool.pool}`)
+      .setLabel(`Zap-In #${index + 1}`)
+      .setStyle(ButtonStyle.Primary),
+  );
   return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...buttons);
 }
 

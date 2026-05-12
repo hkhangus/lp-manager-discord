@@ -111,10 +111,7 @@ export async function getTopLpers(
   };
 }
 
-export async function generateZapInTx(
-  poolId: string,
-  input: ZapInTxInput,
-): Promise<ZapInTxData> {
+export async function generateZapInTx(poolId: string, input: ZapInTxInput): Promise<ZapInTxData> {
   const response = await lpAgentClient.post<LpAgentResponse<ZapInTxData>>(
     `/pools/${encodeURIComponent(poolId)}/add-tx`,
     {
@@ -142,18 +139,13 @@ export interface SubmitZapInLandingInput {
   meta: Record<string, unknown>;
 }
 
-export async function submitZapInLanding(
-  input: SubmitZapInLandingInput,
-): Promise<unknown> {
-  const response = await lpAgentClient.post<LpAgentResponse<unknown>>(
-    "/pools/landing-add-tx",
-    {
-      swapTxsWithJito: input.swapTxsWithJito,
-      addLiquidityTxsWithJito: input.addLiquidityTxsWithJito,
-      lastValidBlockHeight: input.lastValidBlockHeight ?? undefined,
-      meta: input.meta,
-    },
-  );
+export async function submitZapInLanding(input: SubmitZapInLandingInput): Promise<unknown> {
+  const response = await lpAgentClient.post<LpAgentResponse<unknown>>("/pools/landing-add-tx", {
+    swapTxsWithJito: input.swapTxsWithJito,
+    addLiquidityTxsWithJito: input.addLiquidityTxsWithJito,
+    lastValidBlockHeight: input.lastValidBlockHeight ?? undefined,
+    meta: input.meta,
+  });
 
   return response.data;
 }
