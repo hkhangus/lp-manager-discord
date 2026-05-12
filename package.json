@@ -1,0 +1,43 @@
+{
+  "name": "lpagent-discord",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "prisma generate && tsc",
+    "dev": "tsx watch src/bot.ts",
+    "start": "node dist/bot.js",
+    "commands": "tsx src/deployCommands.ts",
+    "prisma:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:dev": "prisma migrate dev",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.8.2",
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.5.0",
+    "node-cron": "^4.1.0",
+    "pino": "^9.6.0",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.27.0",
+    "@types/node": "^22.15.18",
+    "@types/node-cron": "^3.0.11",
+    "eslint": "^9.27.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.5.3",
+    "prisma": "^6.8.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.32.1"
+  },
+  "packageManager": "yarn@4.9.2+sha512.1fc009bc09d13cfd0e19efa44cbfc2b9cf6ca61482725eb35bbc5e257e093ebf4130db6dfe15d604ff4b79efd8e1e8e99b25fa7d0a6197c9f9826358d4d65c3c"
+}

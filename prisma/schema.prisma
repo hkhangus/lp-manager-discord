@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AlertType {
+  OUT_OF_RANGE
+  PNL_ABOVE
+  PNL_BELOW
+  FEE_ABOVE
+}
+
+enum CurrencyPreference {
+  USD
+  NATIVE
+}
+
+model DiscordUser {
+  id            String   @id @default(cuid())
+  discordUserId String   @unique @map("discord_user_id")
+  walletAddress String   @map("wallet_address")
+  currency      CurrencyPreference @default(USD)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  alerts Alert[]
+
+  @@map("discord_users")
+}
+
+model Alert {
+  id              String     @id @default(cuid())
+  userId          String     @map("user_id")
+  type            AlertType
+  positionId      String?    @map("position_id")
+  thresholdValue  Float?     @map("threshold_value")
+  enabled         Boolean    @default(true)
+  lastTriggeredAt DateTime?  @map("last_triggered_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  user   DiscordUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events AlertEvent[]
+
+  @@index([userId])
+  @@index([enabled, type])
+  @@map("alerts")
+}
+
+model AlertEvent {
+  id          String   @id @default(cuid())
+  alertId     String   @map("alert_id")
+  positionId  String?  @map("position_id")
+  value       Float?
+  message     String
+  triggeredAt DateTime @default(now()) @map("triggered_at")
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@map("alert_events")
+}
