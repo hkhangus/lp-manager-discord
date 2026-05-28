@@ -2,6 +2,9 @@
 
 Discord bot MVP for LPAgent communities. Users configure a public wallet address, then use slash commands to inspect balances, LP positions, portfolio metrics, pools, and alerts.
 
+## Demo
+https://youtu.be/f2EeAn8DJls
+
 ## Stack
 
 - Node.js 22 + TypeScript
